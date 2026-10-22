@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full bg-stone-950 text-stone-100 select-none">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D 木工雕刻工作坊 - Wood Lathe Crafting Studio</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Three.js library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <style>
+    /* Custom Scrollbar & Canvas Styles */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #1c1917; }
+    ::-webkit-scrollbar-thumb { background: #44403c; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #78716c; }
+    
+    .wood-card-glow {
+      box-shadow: 0 0 25px -5px rgba(217, 119, 6, 0.2);
+    }
+    
+    canvas {
+      touch-action: none;
+    }
+
+    /* Custom range slider styling */
+    input[type=range] {
+      -webkit-appearance: none;
+      background: #292524;
+      border-radius: 8px;
+      height: 6px;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      height: 18px;
+      width: 18px;
+      border-radius: 50%;
+      background: #f59e0b;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+    }
+  </style>
+</head>
+<body class="h-full w-full overflow-hidden flex flex-col font-sans bg-stone-950">
+
+  <!-- TOP NAVBAR -->
+  <header class="h-16 border-b border-stone-800 bg-stone-900/90 backdrop-blur px-4 flex items-center justify-between z-10 shrink-0">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-700 to-amber-500 flex items-center justify-center text-stone-950 text-xl font-bold shadow-lg shadow-amber-900/30">
+        <i class="fa-solid font-sharp fa-cubes"></i>
+      </div>
+      <div>
+        <h1 class="font-bold text-lg leading-tight bg-gradient-to-r from-amber-200 via-amber-400 to-amber-100 bg-clip-text text-transparent">3D 木工雕刻工作坊</h1>
+        <p class="text-xs text-stone-400 hidden sm:block">Craft & Sculpt 3D Wood Turning Lathe</p>
+      </div>
+    </div>
+
+    <!-- Action Controls -->
+    <div class="flex items-center gap-2 sm:gap-3">
+      <!-- Audio Toggle -->
+      <button id="btn-audio" class="p-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 transition-all flex items-center gap-2 text-sm">
+        <i id="audio-icon" class="fa-solid fa-volume-high text-amber-500"></i>
+        <span class="hidden md:inline">音效</span>
+      </button>
+
+      <!-- Reference Guide Dropdown -->
+      <div class="relative">
+        <select id="guide-select" class="px-3 py-2 rounded-xl bg-stone-800 border border-stone-700 text-stone-200 text-sm focus:outline-none focus:border-amber-500 cursor-pointer">
+          <option value="none">自由創作 (無參考線)</option>
+          <option value="vase">經典花瓶 (Vase)</option>
+          <option value="bowling">保齡球瓶 (Pin)</option>
+          <option value="goblet">高腳高杯 (Goblet)</option>
+          <option value="honey">蜂蜜棒 (Dipper)</option>
+        </select>
+      </div>
+
+      <!-- Reset Button -->
+      <button id="btn-reset" class="px-3 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 transition-all text-sm flex items-center gap-2">
+        <i class="fa-solid fa-rotate-left text-amber-400"></i>
+        <span class="hidden sm:inline">重置木材</span>
+      </button>
+
+      <!-- Finish & Showcase Button -->
+      <button id="btn-finish" class="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-stone-950 font-semibold text-sm transition-all shadow-lg shadow-amber-600/20 flex items-center gap-2">
+        <i class="fa-solid fa-award"></i>
+        <span>完成展示</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN APP CONTAINER -->
+  <main class="flex-1 relative overflow-hidden bg-stone-950 flex flex-col md:flex-row">
+    
+    <!-- 3D CANVAS VIEWPORT -->
+    <div id="canvas-container" class="w-full h-full relative flex-1 cursor-crosshair">
+      <canvas id="webgl-canvas" class="w-full h-full block"></canvas>
+
+      <!-- Guide Silhouette Overlay Canvas -->
+      <canvas id="guide-canvas" class="absolute inset-0 pointer-events-none w-full h-full z-0 opacity-40"></canvas>
+
+      <!-- Accuracy Score Indicator (When reference selected) -->
+      <div id="accuracy-badge" class="hidden absolute top-4 left-4 bg-stone-900/80 backdrop-blur-md border border-stone-700/60 rounded-xl px-4 py-2.5 flex items-center gap-3">
+        <i class="fa-solid fa-bullseye text-amber-500 text-lg"></i>
+        <div>
+          <div class="text-xs text-stone-400">相似度評分</div>
+          <div id="accuracy-score" class="text-lg font-bold text-amber-400">0%</div>
+        </div>
+      </div>
+
+      <!-- Instruction Hint Overlay -->
+      <div id="hint-overlay" class="absolute bottom-6 left-1/2 -translate-x-1/2 bg-stone-900/80 backdrop-blur border border-stone-700/50 text-stone-300 px-4 py-2 rounded-full text-xs sm:text-sm flex items-center gap-2 pointer-events-none transition-opacity duration-500">
+        <i class="fa-solid fa-hand-pointer text-amber-400 animate-bounce"></i>
+        <span>按住滑鼠或觸控螢幕，在旋轉的木頭上滑動進行雕刻</span>
+      </div>
+    </div>
+
+    <!-- TOOLBAR & CONTROLS PANEL (Floating Bottom / Side) -->
+    <div class="z-10 bg-stone-900/90 backdrop-blur-md border-t md:border-t-0 md:border-l border-stone-800 p-4 w-full md:w-80 shrink-0 flex flex-col gap-4">
+      
+      <!-- TOOL SELECTION SWITCHER -->
+      <div>
+        <label class="text-xs font-semibold text-stone-400 uppercase tracking-wider block mb-2">雕刻與加工工具</label>
+        <div class="grid grid-cols-3 gap-2">
+          <!-- Tool 1: Chisel -->
+          <button id="tool-chisel" class="tool-btn active p-3 rounded-xl border border-amber-500/80 bg-amber-500/10 text-amber-400 flex flex-col items-center gap-1.5 transition-all">
+            <i class="fa-solid fa-screwdriver text-lg"></i>
+            <span class="text-xs font-medium">削木刀</span>
+          </button>
+          
+          <!-- Tool 2: Sandpaper -->
+          <button id="tool-sandpaper" class="tool-btn p-3 rounded-xl border border-stone-700 bg-stone-800/60 text-stone-400 hover:text-stone-200 flex flex-col items-center gap-1.5 transition-all">
+            <i class="fa-solid fa-rugs text-lg"></i>
+            <span class="text-xs font-medium">砂紙磨平</span>
+          </button>
+
+          <!-- Tool 3: Varnish / Stain -->
+          <button id="tool-varnish" class="tool-btn p-3 rounded-xl border border-stone-700 bg-stone-800/60 text-stone-400 hover:text-stone-200 flex flex-col items-center gap-1.5 transition-all">
+            <i class="fa-solid fa-brush text-lg"></i>
+            <span class="text-xs font-medium">木材染色</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- DYNAMIC TOOL SETTINGS CONTROLS -->
+      
+      <!-- Chisel & Sandpaper Options -->
+      <div id="panel-carving" class="space-y-4">
+        <!-- Tool Size Slider -->
+        <div>
+          <div class="flex justify-between text-xs mb-1.5">
+            <span class="text-stone-300">刀具尺寸 (Size)</span>
+            <span id="val-tool-size" class="text-amber-400 font-mono">0.35</span>
+          </div>
+          <input id="slider-tool-size" type="range" min="0.1" max="0.8" step="0.05" value="0.35" class="w-full">
+        </div>
+
+        <!-- Cut Depth / Sensitivity -->
+        <div>
+          <div class="flex justify-between text-xs mb-1.5">
+            <span class="text-stone-300">削切深度 (Cut Depth)</span>
+            <span id="val-tool-depth" class="text-amber-400 font-mono">0.40</span>
+          </div>
+          <input id="slider-tool-depth" type="range" min="0.1" max="1.0" step="0.05" value="0.40" class="w-full">
+        </div>
+      </div>
+
+      <!-- Wood Varnish / Stain Options (Shown when Varnish tool active) -->
+      <div id="panel-varnish" class="hidden space-y-3">
+        <label class="text-xs font-semibold text-stone-400 uppercase tracking-wider block">選擇木材漆面質感</label>
+        <div class="grid grid-cols-2 gap-2">
+          <button data-stain="pine" class="stain-btn border-2 border-amber-500 p-2.5 rounded-xl bg-stone-800 flex items-center gap-2 text-left">
+            <span class="w-5 h-5 rounded-full bg-[#d49b59] inline-block shrink-0 border border-amber-200/40"></span>
+            <span class="text-xs text-stone-200">松木 (Pine)</span>
+          </button>
+          
+          <button data-stain="oak" class="stain-btn border border-stone-700 p-2.5 rounded-xl bg-stone-800 flex items-center gap-2 text-left">
+            <span class="w-5 h-5 rounded-full bg-[#c88b3f] inline-block shrink-0 border border-amber-200/40"></span>
+            <span class="text-xs text-stone-200">橡木 (Oak)</span>
+          </button>
+
+          <button data-stain="mahogany" class="stain-btn border border-stone-700 p-2.5 rounded-xl bg-stone-800 flex items-center gap-2 text-left">
+            <span class="w-5 h-5 rounded-full bg-[#6a1b1a] inline-block shrink-0 border border-amber-200/40"></span>
+            <span class="text-xs text-stone-200">紅木 (Cherry)</span>
+          </button>
+
+          <button data-stain="walnut" class="stain-btn border border-stone-700 p-2.5 rounded-xl bg-stone-800 flex items-center gap-2 text-left">
+            <span class="w-5 h-5 rounded-full bg-[#3e271a] inline-block shrink-0 border border-amber-200/40"></span>
+            <span class="text-xs text-stone-200">胡桃木 (Walnut)</span>
+          </button>
+        </div>
+
+        <!-- Glossiness Slider -->
+        <div class="pt-2">
+          <div class="flex justify-between text-xs mb-1.5">
+            <span class="text-stone-300">亮光度 / 光澤 (Glossiness)</span>
+            <span id="val-gloss" class="text-amber-400 font-mono">50%</span>
+          </div>
+          <input id="slider-gloss" type="range" min="0" max="1" step="0.05" value="0.5" class="w-full">
+        </div>
+      </div>
+
+      <!-- Lathe Speed Slider -->
+      <div class="pt-2 border-t border-stone-800">
+        <div class="flex justify-between text-xs mb-1.5">
+          <span class="text-stone-400">車床旋轉速度 (RPM)</span>
+          <span id="val-lathe-speed" class="text-amber-400 font-mono">1200 RPM</span>
+        </div>
+        <input id="slider-lathe-speed" type="range" min="200" max="2500" step="100" value="1200" class="w-full">
+      </div>
+
+    </div>
+  </main>
+
+  <!-- SHOWCASE & SHARE MODAL -->
+  <div id="modal-showcase" class="fixed inset-0 bg-stone-950/90 backdrop-blur-lg z-50 hidden flex items-center justify-center p-4 sm:p-6 opacity-0 transition-opacity duration-300">
+    <div class="bg-stone-900 border border-stone-700/70 rounded-2xl max-w-xl w-full p-6 shadow-2xl flex flex-col gap-5 wood-card-glow">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between border-b border-stone-800 pb-3">
+        <div class="flex items-center gap-2 text-amber-400 font-bold text-lg">
+          <i class="fa-solid fa-trophy"></i>
+          <span>雕刻作品完成展示</span>
+        </div>
+        <button id="modal-close" class="text-stone-400 hover:text-stone-100 p-1.5 rounded-lg hover:bg-stone-800 text-lg transition-all">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Rendered Image Snapshot Preview -->
+      <div class="relative bg-stone-950 rounded-xl overflow-hidden border border-stone-800 aspect-video flex items-center justify-center group">
+        <img id="showcase-img" class="w-full h-full object-contain" alt="Crafted Wood Piece">
+        <div class="absolute bottom-3 right-3 bg-stone-900/80 backdrop-blur px-3 py-1 rounded-full border border-stone-700 text-xs text-amber-400 flex items-center gap-1.5">
+          <i class="fa-solid fa-check-circle"></i> Handcrafted 3D Model
+        </div>
+      </div>
+
+      <!-- Modal Action Buttons -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <!-- Download Image -->
+        <button id="btn-download" class="px-4 py-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200 font-medium text-sm transition-all flex items-center justify-center gap-2">
+          <i class="fa-solid fa-download text-amber-400"></i>
+          <span>下載圖片</span>
+        </button>
+
+        <!-- Copy Image -->
+        <button id="btn-copy" class="px-4 py-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200 font-medium text-sm transition-all flex items-center justify-center gap-2">
+          <i class="fa-solid fa-copy text-amber-400"></i>
+          <span>複製圖片</span>
+        </button>
+
+        <!-- Web Share API / Share -->
+        <button id="btn-share" class="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20">
+          <i class="fa-solid fa-share-nodes"></i>
+          <span>分享作品</span>
+        </button>
+      </div>
+
+      <!-- Back / Craft Again -->
+      <div class="pt-2 border-t border-stone-800/80 flex justify-end">
+        <button id="btn-continue" class="px-4 py-2 text-stone-400 hover:text-stone-200 text-sm flex items-center gap-1.5">
+          <i class="fa-solid fa-hammer"></i>
+          <span>繼續加工 / 返回</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION MESSAGE -->
+  <div id="toast" class="fixed bottom-20 left-1/2 -translate-x-1/2 bg-stone-800 border border-amber-500/50 text-stone-200 px-4 py-2.5 rounded-xl text-sm font-medium shadow-xl opacity-0 transition-all duration-300 pointer-events-none z-50 flex items-center gap-2">
+    <i id="toast-icon" class="fa-solid fa-circle-info text-amber-400"></i>
+    <span id="toast-msg">通知消息</span>
+  </div>
+
+  <!-- MAIN SCRIPT -->
+  <script>
+    // --- APP CONSTANTS & VARIABLES ---
+    const WOOD_LENGTH = 6.0;
+    const INITIAL_RADIUS = 1.25;
+    const MIN_RADIUS = 0.15;
+    const N_SLICES = 160;     // Axial resolution along length
+    const N_RADIAL = 64;      // Radial resolution around cylinder
+
+    // Wood Stains Color Configs
+    const WOOD_STAINS = {
+      pine: { name: "Pine", color: 0xd49b59, roughness: 0.45, clearcoat: 0.1 },
+      oak: { name: "Oak", color: 0xc88b3f, roughness: 0.38, clearcoat: 0.2 },
+      mahogany: { name: "Mahogany", color: 0x6a1b1a, roughness: 0.25, clearcoat: 0.5 },
+      walnut: { name: "Walnut", color: 0x3e271a, roughness: 0.30, clearcoat: 0.4 }
+    };
+
+    // Reference Silhouettes targets (normalized radius along length [0 to 1])
+    const GUIDE_TEMPLATES = {
+      vase: (t) => 0.3 + 0.6 * Math.sin(t * Math.PI) * (0.6 + 0.4 * Math.cos(t * Math.PI * 2)),
+      bowling: (t) => 0.25 + 0.7 * Math.exp(-Math.pow((t - 0.35) * 4, 2)) + 0.3 * Math.exp(-Math.pow((t - 0.85) * 5, 2)),
+      goblet: (t) => (t < 0.15) ? 0.9 : (t < 0.6) ? 0.2 : 0.85 * Math.sin((t - 0.6) / 0.4 * Math.PI * 0.5 + 0.2),
+      honey: (t) => (t > 0.35) ? 0.7 + 0.25 * Math.sin(t * Math.PI * 12) : 0.25
+    };
+
+    // App State
+    let state = {
+      tool: 'chisel',        // 'chisel', 'sandpaper', 'varnish'
+      toolSize: 0.35,
+      toolDepth: 0.40,
+      stain: 'pine',
+      gloss: 0.5,
+      rpm: 1200,
+      audioEnabled: true,
+      activeGuide: 'none',
+      isCarving: false,
+      isShowcase: false
+    };
+
+    // Wood Radii Data
+    let sliceRadii = new Float32Array(N_SLICES).fill(INITIAL_RADIUS);
+    let vertexSliceIndices = [];
+    let vertexAngles = [];
+
+    // Three.js Core Variables
+    let scene, camera, renderer;
+    let woodMesh, latheGroup, toolMesh, particlesMesh;
+    let woodMaterial, woodTexture;
+    let particleData = [];
+    
+    // Audio Engine Variables
+    let audioCtx = null;
+    let motorOsc = null, motorGain = null;
+    let noiseNode = null, cutFilter = null, cutGain = null;
+
+    // Interaction Variables
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    let isMouseDown = false;
+    let currentHoverPoint = null;
+
+    // --- INITIALIZATION ---
+    window.onload = function() {
+      initThreeJS();
+      initWoodGeometry();
+      buildLatheMachine();
+      initParticles();
+      initToolMesh();
+      setupEventListeners();
+      setupAudio();
+      
+      // Start Render Loop
+      animate();
+    };
+
+    // --- THREE.JS SCENE SETUP ---
+    function initThreeJS() {
+      const container = document.getElementById('canvas-container');
+      
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x141211);
+      scene.fog = new THREE.FogExp2(0x141211, 0.04);
+
+      camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+      camera.position.set(0, 1.8, 7.5);
+      camera.lookAt(0, 0, 0);
+
+      renderer = new THREE.WebGLRenderer({
+        canvas: document.getElementById('webgl-canvas'),
+        antialias: true,
+        preserveDrawingBuffer: true
+      });
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+      // Lights
+      const ambientLight = new THREE.AmbientLight(0xfff5ea, 0.8);
+      scene.add(ambientLight);
+
+      const mainSpot = new THREE.SpotLight(0xfffaed, 2.5);
+      mainSpot.position.set(4, 8, 6);
+      mainSpot.angle = Math.PI / 4;
+      mainSpot.penumbra = 0.5;
+      mainSpot.castShadow = true;
+      mainSpot.shadow.mapSize.width = 1024;
+      mainSpot.shadow.mapSize.height = 1024;
+      scene.add(mainSpot);
+
+      const rimLight = new THREE.DirectionalLight(0xffb76b, 1.2);
+      rimLight.position.set(-5, 3, -4);
+      scene.add(rimLight);
+
+      // Group holding lathe machine and rotating wood
+      latheGroup = new THREE.Group();
+      scene.add(latheGroup);
+    }
+
+    // --- PROCEDURAL WOOD TEXTURE ---
+    function generateWoodTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1024;
+      canvas.height = 1024;
+      const ctx = canvas.getContext('2d');
+
+      // Base warm wood background
+      ctx.fillStyle = '#d49b59';
+      ctx.fillRect(0, 0, 1024, 1024);
+
+      // Fine wood grain lines running along horizontal length
+      for (let i = 0; i < 1200; i++) {
+        const y = Math.random() * 1024;
+        const h = Math.random() * 2 + 0.5;
+        const alpha = Math.random() * 0.12 + 0.03;
+        ctx.fillStyle = `rgba(70, 30, 5, ${alpha})`;
+        ctx.fillRect(0, y, 1024, h);
+      }
+
+      // Organic wavy grain rings
+      ctx.strokeStyle = 'rgba(50, 20, 0, 0.07)';
+      ctx.lineWidth = 4;
+      for (let i = 0; i < 35; i++) {
+        ctx.beginPath();
+        let startY = Math.random() * 1024;
+        ctx.moveTo(0, startY);
+        ctx.bezierCurveTo(
+          256, startY + (Math.random() - 0.5) * 60,
+          768, startY + (Math.random() - 0.5) * 60,
+          1024, startY
+        );
+        ctx.stroke();
+      }
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.repeat.set(1, 4);
+      return texture;
+    }
+
+    // --- WOOD DEFORMABLE GEOMETRY SETUP ---
+    function initWoodGeometry() {
+      const geometry = new THREE.CylinderGeometry(
+        INITIAL_RADIUS, INITIAL_RADIUS, WOOD_LENGTH, N_RADIAL, N_SLICES - 1, false
+      );
+      
+      // Re-orient cylinder along X axis (horizontal lathe axis)
+      geometry.rotateZ(-Math.PI / 2);
+
+      const pos = geometry.attributes.position;
+      const count = pos.count;
+
+      vertexSliceIndices = new Int32Array(count);
+      vertexAngles = new Float32Array(count);
+
+      // Precalculate vertex mapping to slice index and angle theta
+      for (let i = 0; i < count; i++) {
+        const x = pos.getX(i);
+        const y = pos.getY(i);
+        const z = pos.getZ(i);
+
+        // Normalize X coordinate to slice index [0 ... N_SLICES-1]
+        const normX = (x + WOOD_LENGTH / 2) / WOOD_LENGTH;
+        const sliceIdx = Math.max(0, Math.min(N_SLICES - 1, Math.round(normX * (N_SLICES - 1))));
+        
+        const angle = Math.atan2(z, y);
+
+        vertexSliceIndices[i] = sliceIdx;
+        vertexAngles[i] = angle;
+      }
+
+      woodTexture = generateWoodTexture();
+
+      woodMaterial = new THREE.MeshPhysicalMaterial({
+        color: WOOD_STAINS.pine.color,
+        map: woodTexture,
+        roughness: WOOD_STAINS.pine.roughness,
+        metalness: 0.02,
+        clearcoat: WOOD_STAINS.pine.clearcoat,
+        clearcoatRoughness: 0.1,
+        reflectivity: 0.5
+      });
+
+      woodMesh = new THREE.Mesh(geometry, woodMaterial);
+      woodMesh.castShadow = true;
+      woodMesh.receiveShadow = true;
+      latheGroup.add(woodMesh);
+    }
+
+    // --- LATHE MACHINE BASE & FRAME VISUALS ---
+    function buildLatheMachine() {
+      const machineGroup = new THREE.Group();
+      
+      // Dark Metal Material
+      const metalMat = new THREE.MeshStandardMaterial({
+        color: 0x22252a,
+        roughness: 0.35,
+        metalness: 0.8
+      });
+
+      const chromeMat = new THREE.MeshStandardMaterial({
+        color: 0xcccccc,
+        roughness: 0.2,
+        metalness: 0.95
+      });
+
+      // Bed Frame Base
+      const bedGeo = new THREE.BoxGeometry(WOOD_LENGTH + 2.5, 0.4, 1.8);
+      const bedMesh = new THREE.Mesh(bedGeo, metalMat);
+      bedMesh.position.set(0, -1.6, 0);
+      bedMesh.receiveShadow = true;
+      machineGroup.add(bedMesh);
+
+      // Parallel Metal Rails
+      const rail1 = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, WOOD_LENGTH + 2.2), chromeMat);
+      rail1.rotateZ(Math.PI / 2);
+      rail1.position.set(0, -1.3, 0.4);
+      machineGroup.add(rail1);
+
+      const rail2 = rail1.clone();
+      rail2.position.set(0, -1.3, -0.4);
+      machineGroup.add(rail2);
+
+      // Headstock (Left Motor Base)
+      const headGeo = new THREE.BoxGeometry(1.0, 1.6, 1.4);
+      const headMesh = new THREE.Mesh(headGeo, metalMat);
+      headMesh.position.set(-WOOD_LENGTH / 2 - 0.7, -0.6, 0);
+      headMesh.castShadow = true;
+      machineGroup.add(headMesh);
+
+      // Left Chuck Clamp
+      const chuckGeo = new THREE.CylinderGeometry(1.35, 1.35, 0.4, 32);
+      const chuckMesh = new THREE.Mesh(chuckGeo, chromeMat);
+      chuckMesh.rotateZ(Math.PI / 2);
+      chuckMesh.position.set(-WOOD_LENGTH / 2 - 0.2, 0, 0);
+      latheGroup.add(chuckMesh);
+
+      // Tailstock (Right Holder)
+      const tailGeo = new THREE.BoxGeometry(0.9, 1.4, 1.2);
+      const tailMesh = new THREE.Mesh(tailGeo, metalMat);
+      tailMesh.position.set(WOOD_LENGTH / 2 + 0.6, -0.6, 0);
+      tailMesh.castShadow = true;
+      machineGroup.add(tailMesh);
+
+      // Right Center Cone
+      const coneGeo = new THREE.ConeGeometry(0.4, 0.6, 32);
+      const coneMesh = new THREE.Mesh(coneGeo, chromeMat);
+      coneMesh.rotateZ(Math.PI / 2);
+      coneMesh.position.set(WOOD_LENGTH / 2 + 0.15, 0, 0);
+      machineGroup.add(coneMesh);
+
+      // Tool Rest Rail
+      const toolRestGeo = new THREE.BoxGeometry(WOOD_LENGTH, 0.15, 0.2);
+      const toolRestMesh = new THREE.Mesh(toolRestGeo, chromeMat);
+      toolRestMesh.position.set(0, -0.3, 1.5);
+      machineGroup.add(toolRestMesh);
+
+      scene.add(machineGroup);
+    }
+
+    // --- CARVING CHISEL TOOL MESH ---
+    function initToolMesh() {
+      const toolGroup = new THREE.Group();
+
+      // Wooden Handle
+      const handleGeo = new THREE.CylinderGeometry(0.12, 0.08, 1.2, 16);
+      const handleMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.6 });
+      const handle = new THREE.Mesh(handleGeo, handleMat);
+      handle.position.set(0, -0.8, 0);
+      toolGroup.add(handle);
+
+      // Metallic Blade Tip
+      const bladeGeo = new THREE.BoxGeometry(0.1, 0.8, 0.04);
+      const bladeMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.9, roughness: 0.2 });
+      const blade = new THREE.Mesh(bladeGeo, bladeMat);
+      blade.position.set(0, -0.1, 0);
+      toolGroup.add(blade);
+
+      toolGroup.rotation.x = Math.PI / 4;
+      toolGroup.visible = false;
+
+      toolMesh = toolGroup;
+      scene.add(toolMesh);
+    }
+
+    // --- WOOD CHIPS PARTICLE SYSTEM ---
+    function initParticles() {
+      const particleCount = 180;
+      const geometry = new THREE.BufferGeometry();
+      const positions = new Float32Array(particleCount * 3);
+      const colors = new Float32Array(particleCount * 3);
+
+      for (let i = 0; i < particleCount; i++) {
+        positions[i * 3] = 0;
+        positions[i * 3 + 1] = 0;
+        positions[i * 3 + 2] = 0;
+
+        // Warm wood chip color variance
+        colors[i * 3] = 0.85 + Math.random() * 0.15;
+        colors[i * 3 + 1] = 0.6 + Math.random() * 0.2;
+        colors[i * 3 + 2] = 0.3 + Math.random() * 0.2;
+
+        particleData.push({
+          vx: 0, vy: 0, vz: 0,
+          life: 0,
+          maxLife: 0.4 + Math.random() * 0.4
+        });
+      }
+
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+      const material = new THREE.PointsMaterial({
+        size: 0.08,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.9
+      });
+
+      particlesMesh = new THREE.Points(geometry, material);
+      scene.add(particlesMesh);
+    }
+
+    function emitWoodChips(originX, originY, originZ, count = 4) {
+      const positions = particlesMesh.geometry.attributes.position.array;
+
+      for (let i = 0; i < count; i++) {
+        // Find inactive particle slot
+        const pIdx = particleData.findIndex(p => p.life <= 0);
+        if (pIdx === -1) break;
+
+        const p = particleData[pIdx];
+        p.life = p.maxLife;
+
+        // Tangential velocity flying off wood surface
+        p.vx = (Math.random() - 0.5) * 2.0;
+        p.vy = 1.5 + Math.random() * 2.5;
+        p.vz = 2.0 + Math.random() * 2.5;
+
+        positions[pIdx * 3] = originX + (Math.random() - 0.5) * 0.1;
+        positions[pIdx * 3 + 1] = originY;
+        positions[pIdx * 3 + 2] = originZ;
+      }
+      particlesMesh.geometry.attributes.position.needsUpdate = true;
+    }
+
+    function updateParticles(dt) {
+      const positions = particlesMesh.geometry.attributes.position.array;
+
+      particleData.forEach((p, i) => {
+        if (p.life > 0) {
+          p.life -= dt;
+          p.vy -= 9.8 * dt; // Gravity
+
+          positions[i * 3] += p.vx * dt;
+          positions[i * 3 + 1] += p.vy * dt;
+          positions[i * 3 + 2] += p.vz * dt;
+
+          if (p.life <= 0) {
+            positions[i * 3] = 0;
+            positions[i * 3 + 1] = -100;
+            positions[i * 3 + 2] = 0;
+          }
+        }
+      });
+
+      particlesMesh.geometry.attributes.position.needsUpdate = true;
+    }
+
+    // --- WEB AUDIO API SYNTHESIZER ---
+    function setupAudio() {
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContext();
+
+        // Motor Lathe Hum
+        motorOsc = audioCtx.createOscillator();
+        motorGain = audioCtx.createGain();
+        const motorFilter = audioCtx.createBiquadFilter();
+
+        motorOsc.type = 'sawtooth';
+        motorOsc.frequency.setValueAtTime(65, audioCtx.currentTime); // Low engine growl
+
+        motorFilter.type = 'lowpass';
+        motorFilter.frequency.setValueAtTime(220, audioCtx.currentTime);
+
+        motorGain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+
+        motorOsc.connect(motorFilter);
+        motorFilter.connect(motorGain);
+        motorGain.connect(audioCtx.destination);
+        motorOsc.start();
+
+        // Carving Scraping Noise
+        const bufferSize = audioCtx.sampleRate * 2;
+        const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          output[i] = Math.random() * 2 - 1;
+        }
+
+        noiseNode = audioCtx.createBufferSource();
+        noiseNode.buffer = noiseBuffer;
+        noiseNode.loop = true;
+
+        cutFilter = audioCtx.createBiquadFilter();
+        cutFilter.type = 'bandpass';
+        cutFilter.frequency.setValueAtTime(1200, audioCtx.currentTime);
+        cutFilter.Q.setValueAtTime(3.0, audioCtx.currentTime);
+
+        cutGain = audioCtx.createGain();
+        cutGain.gain.setValueAtTime(0, audioCtx.currentTime);
+
+        noiseNode.connect(cutFilter);
+        cutFilter.connect(cutGain);
+        cutGain.connect(audioCtx.destination);
+        noiseNode.start();
+
+      } catch (e) {
+        console.warn("Web Audio initialization skipped:", e);
+      }
+    }
+
+    function updateAudio(cuttingSpeed = 0) {
+      if (!audioCtx || !state.audioEnabled) return;
+      if (audioCtx.state === 'suspended' && isMouseDown) {
+        audioCtx.resume();
+      }
+
+      const targetGain = cuttingSpeed > 0 ? Math.min(0.35, cuttingSpeed * 0.3) : 0;
+      cutGain.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.05);
+
+      if (cuttingSpeed > 0) {
+        // Dynamic pitch based on carve intensity
+        const freq = 900 + state.toolDepth * 800 + Math.random() * 100;
+        cutFilter.frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.05);
+      }
+    }
+
+    // --- CARVING & WOOD DEFORMATION LOGIC ---
+    function carveWoodAt(xWorld, dt) {
+      // Map world X position [-WOOD_LENGTH/2, WOOD_LENGTH/2] to slice index
+      const normX = (xWorld + WOOD_LENGTH / 2) / WOOD_LENGTH;
+      const targetSlice = Math.round(normX * (N_SLICES - 1));
+
+      if (targetSlice < 2 || targetSlice > N_SLICES - 3) return false; // Protect end chucks
+
+      const carveWidthSlices = Math.round((state.toolSize * 15));
+      const cutSpeed = state.toolDepth * 1.8 * dt;
+
+      let radiusChanged = false;
+
+      if (state.tool === 'chisel') {
+        for (let s = targetSlice - carveWidthSlices; s <= targetSlice + carveWidthSlices; s++) {
+          if (s >= 1 && s < N_SLICES - 1) {
+            const dist = Math.abs(s - targetSlice);
+            const factor = Math.cos((dist / (carveWidthSlices + 1)) * Math.PI * 0.5);
+            const deltaRadius = cutSpeed * factor;
+
+            if (sliceRadii[s] > MIN_RADIUS) {
+              sliceRadii[s] = Math.max(MIN_RADIUS, sliceRadii[s] - deltaRadius);
+              radiusChanged = true;
+            }
+          }
+        }
+      } else if (state.tool === 'sandpaper') {
+        // Smoothing blur kernel across slices
+        for (let s = targetSlice - carveWidthSlices; s <= targetSlice + carveWidthSlices; s++) {
+          if (s >= 2 && s < N_SLICES - 2) {
+            const neighborAvg = (sliceRadii[s - 1] + sliceRadii[s + 1]) * 0.5;
+            sliceRadii[s] = sliceRadii[s] * 0.85 + neighborAvg * 0.15;
+            radiusChanged = true;
+          }
+        }
+      }
+
+      if (radiusChanged) {
+        updateWoodGeometryMesh();
+      }
+
+      return radiusChanged;
+    }
+
+    function updateWoodGeometryMesh() {
+      const pos = woodMesh.geometry.attributes.position;
+      const count = pos.count;
+
+      for (let i = 0; i < count; i++) {
+        const sliceIdx = vertexSliceIndices[i];
+        const theta = vertexAngles[i];
+        const r = sliceRadii[sliceIdx];
+
+        pos.setY(i, Math.cos(theta) * r);
+        pos.setZ(i, Math.sin(theta) * r);
+      }
+
+      pos.needsUpdate = true;
+      woodMesh.geometry.computeVertexNormals();
+
+      updateAccuracyScore();
+    }
+
+    // --- REFERENCE GUIDE OVERLAY & ACCURACY SCORE ---
+    function updateAccuracyScore() {
+      if (state.activeGuide === 'none' || !GUIDE_TEMPLATES[state.activeGuide]) {
+        document.getElementById('accuracy-badge').classList.add('hidden');
+        return;
+      }
+
+      document.getElementById('accuracy-badge').classList.remove('hidden');
+      const fn = GUIDE_TEMPLATES[state.activeGuide];
+
+      let totalDiff = 0;
+      for (let i = 5; i < N_SLICES - 5; i++) {
+        const normX = i / (N_SLICES - 1);
+        const targetR = fn(normX) * INITIAL_RADIUS;
+        const currentR = sliceRadii[i];
+        totalDiff += Math.abs(targetR - currentR);
+      }
+
+      const avgDiff = totalDiff / (N_SLICES - 10);
+      const accuracy = Math.max(0, Math.min(100, Math.round((1 - avgDiff / INITIAL_RADIUS) * 100)));
+      document.getElementById('accuracy-score').innerText = `${accuracy}%`;
+    }
+
+    function renderGuideOverlay() {
+      const guideCanvas = document.getElementById('guide-canvas');
+      const ctx = guideCanvas.getContext('2d');
+      const w = guideCanvas.width = guideCanvas.clientWidth;
+      const h = guideCanvas.height = guideCanvas.clientHeight;
+
+      ctx.clearRect(0, 0, w, h);
+
+      if (state.activeGuide === 'none' || !GUIDE_TEMPLATES[state.activeGuide]) return;
+
+      const fn = GUIDE_TEMPLATES[state.activeGuide];
+      
+      // Draw silhouette template line in screen center space
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([6, 6]);
+
+      const centerY = h / 2;
+      const startX = w * 0.2;
+      const lengthPx = w * 0.6;
+
+      ctx.beginPath();
+      for (let x = 0; x <= 100; x++) {
+        const normX = x / 100;
+        const radiusNorm = fn(normX);
+        const screenX = startX + normX * lengthPx;
+        const screenY = centerY - radiusNorm * 90;
+
+        if (x === 0) ctx.moveTo(screenX, screenY);
+        else ctx.lineTo(screenX, screenY);
+      }
+      ctx.stroke();
+
+      // Mirror bottom half
+      ctx.beginPath();
+      for (let x = 0; x <= 100; x++) {
+        const normX = x / 100;
+        const radiusNorm = fn(normX);
+        const screenX = startX + normX * lengthPx;
+        const screenY = centerY + radiusNorm * 90;
+
+        if (x === 0) ctx.moveTo(screenX, screenY);
+        else ctx.lineTo(screenX, screenY);
+      }
+      ctx.stroke();
+    }
+
+    // --- EVENT LISTENERS & INTERACTION ---
+    function setupEventListeners() {
+      const container = document.getElementById('canvas-container');
+
+      // Pointer events for carving
+      container.addEventListener('pointerdown', onPointerDown);
+      container.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
+
+      // Tool Switching Buttons
+      document.getElementById('tool-chisel').onclick = () => setTool('chisel');
+      document.getElementById('tool-sandpaper').onclick = () => setTool('sandpaper');
+      document.getElementById('tool-varnish').onclick = () => setTool('varnish');
+
+      // Sliders
+      document.getElementById('slider-tool-size').oninput = (e) => {
+        state.toolSize = parseFloat(e.target.value);
+        document.getElementById('val-tool-size').innerText = state.toolSize.toFixed(2);
+      };
+
+      document.getElementById('slider-tool-depth').oninput = (e) => {
+        state.toolDepth = parseFloat(e.target.value);
+        document.getElementById('val-tool-depth').innerText = state.toolDepth.toFixed(2);
+      };
+
+      document.getElementById('slider-lathe-speed').oninput = (e) => {
+        state.rpm = parseInt(e.target.value);
+        document.getElementById('val-lathe-speed').innerText = `${state.rpm} RPM`;
+      };
+
+      document.getElementById('slider-gloss').oninput = (e) => {
+        state.gloss = parseFloat(e.target.value);
+        woodMaterial.roughness = 0.5 * (1 - state.gloss);
+        woodMaterial.clearcoat = state.gloss;
+        document.getElementById('val-gloss').innerText = `${Math.round(state.gloss * 100)}%`;
+      };
+
+      // Wood Stain Buttons
+      document.querySelectorAll('.stain-btn').forEach(btn => {
+        btn.onclick = () => {
+          const stainKey = btn.getAttribute('data-stain');
+          applyWoodStain(stainKey);
+
+          document.querySelectorAll('.stain-btn').forEach(b => {
+            b.classList.remove('border-amber-500');
+            b.classList.add('border-stone-700');
+          });
+          btn.classList.add('border-amber-500');
+        };
+      });
+
+      // Guide Select
+      document.getElementById('guide-select').onchange = (e) => {
+        state.activeGuide = e.target.value;
+        updateAccuracyScore();
+        renderGuideOverlay();
+      };
+
+      // Reset Wood
+      document.getElementById('btn-reset').onclick = resetWood;
+
+      // Audio Toggle
+      document.getElementById('btn-audio').onclick = () => {
+        state.audioEnabled = !state.audioEnabled;
+        const icon = document.getElementById('audio-icon');
+        icon.className = state.audioEnabled ? "fa-solid fa-volume-high text-amber-500" : "fa-solid fa-volume-xmark text-stone-500";
+        showToast(state.audioEnabled ? "音效已開啟" : "音效已靜音");
+      };
+
+      // Showcase Button
+      document.getElementById('btn-finish').onclick = openShowcaseModal;
+      document.getElementById('modal-close').onclick = closeShowcaseModal;
+      document.getElementById('btn-continue').onclick = closeShowcaseModal;
+
+      // Showcase Action Buttons
+      document.getElementById('btn-download').onclick = downloadImage;
+      document.getElementById('btn-copy').onclick = copyImageToClipboard;
+      document.getElementById('btn-share').onclick = shareCraft;
+
+      // Resize listener
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    function setTool(toolName) {
+      state.tool = toolName;
+      document.querySelectorAll('.tool-btn').forEach(b => {
+        b.classList.remove('border-amber-500/80', 'bg-amber-500/10', 'text-amber-400');
+        b.classList.add('border-stone-700', 'bg-stone-800/60', 'text-stone-400');
+      });
+
+      const activeBtn = document.getElementById(`tool-${toolName}`);
+      activeBtn.classList.remove('border-stone-700', 'bg-stone-800/60', 'text-stone-400');
+      activeBtn.classList.add('border-amber-500/80', 'bg-amber-500/10', 'text-amber-400');
+
+      if (toolName === 'varnish') {
+        document.getElementById('panel-carving').classList.add('hidden');
+        document.getElementById('panel-varnish').classList.remove('hidden');
+      } else {
+        document.getElementById('panel-carving').classList.remove('hidden');
+        document.getElementById('panel-varnish').classList.add('hidden');
+      }
+    }
+
+    function applyWoodStain(stainKey) {
+      if (!WOOD_STAINS[stainKey]) return;
+      state.stain = stainKey;
+      const cfg = WOOD_STAINS[stainKey];
+
+      woodMaterial.color.setHex(cfg.color);
+      woodMaterial.roughness = cfg.roughness;
+      woodMaterial.clearcoat = cfg.clearcoat;
+      showToast(`已套用 ${cfg.name} 木質漆面`);
+    }
+
+    function resetWood() {
+      sliceRadii.fill(INITIAL_RADIUS);
+      updateWoodGeometryMesh();
+      showToast("已重置木材形狀");
+    }
+
+    // --- POINTER RAYCASTING ---
+    function updatePointerCoordinates(e) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    }
+
+    function onPointerDown(e) {
+      if (state.isShowcase) return;
+      isMouseDown = true;
+      updatePointerCoordinates(e);
+
+      // Hide instruction hint after first cut
+      document.getElementById('hint-overlay').style.opacity = '0';
+    }
+
+    function onPointerMove(e) {
+      if (state.isShowcase) return;
+      updatePointerCoordinates(e);
+
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObject(woodMesh);
+
+      if (intersects.length > 0) {
+        currentHoverPoint = intersects[0].point;
+        
+        // Position visual chisel tool
+        toolMesh.visible = (state.tool !== 'varnish');
+        toolMesh.position.set(currentHoverPoint.x, currentHoverPoint.y + 0.3, currentHoverPoint.z + 0.1);
+      } else {
+        currentHoverPoint = null;
+        toolMesh.visible = false;
+      }
+    }
+
+    function onPointerUp() {
+      isMouseDown = false;
+      state.isCarving = false;
+      updateAudio(0);
+    }
+
+    function onWindowResize() {
+      const container = document.getElementById('canvas-container');
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      renderGuideOverlay();
+    }
+
+    // --- SHOWCASE MODAL & EXPORT ---
+    function openShowcaseModal() {
+      state.isShowcase = true;
+      toolMesh.visible = false;
+
+      // Rotate camera to elegant showcase studio perspective
+      camera.position.set(2.5, 2.0, 5.0);
+      camera.lookAt(0, 0, 0);
+
+      // Render crisp snapshot
+      renderer.render(scene, camera);
+      const dataUrl = renderer.domElement.toDataURL('image/png');
+
+      document.getElementById('showcase-img').src = dataUrl;
+
+      const modal = document.getElementById('modal-showcase');
+      modal.classList.remove('hidden');
+      setTimeout(() => modal.classList.remove('opacity-0'), 10);
+    }
+
+    function closeShowcaseModal() {
+      const modal = document.getElementById('modal-showcase');
+      modal.classList.add('opacity-0');
+      setTimeout(() => {
+        modal.classList.add('hidden');
+        state.isShowcase = false;
+        
+        // Restore camera
+        camera.position.set(0, 1.8, 7.5);
+        camera.lookAt(0, 0, 0);
+      }, 300);
+    }
+
+    function downloadImage() {
+      const link = document.createElement('a');
+      link.download = `Wood_Craft_${Date.now()}.png`;
+      link.href = document.getElementById('showcase-img').src;
+      link.click();
+      showToast("圖片下載成功！");
+    }
+
+    function copyImageToClipboard() {
+      const dataUrl = document.getElementById('showcase-img').src;
+      
+      try {
+        fetch(dataUrl)
+          .then(res => res.blob())
+          .then(blob => {
+            const item = new ClipboardItem({ 'image/png': blob });
+            navigator.clipboard.write([item]).then(() => {
+              showToast("作品圖片已複製至剪貼簿！");
+            });
+          });
+      } catch (err) {
+        showToast("瀏覽器不支援複製圖片，請使用下載按鈕");
+      }
+    }
+
+    function shareCraft() {
+      if (navigator.share) {
+        fetch(document.getElementById('showcase-img').src)
+          .then(res => res.blob())
+          .then(blob => {
+            const file = new File([blob], 'wood_craft.png', { type: 'image/png' });
+            navigator.share({
+              title: '3D 木工雕刻作品',
+              text: '看看我用 3D 木工車床削出的雕刻作品！',
+              files: [file]
+            }).catch(() => {});
+          });
+      } else {
+        copyImageToClipboard();
+      }
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toast-msg').innerText = msg;
+      toast.classList.remove('opacity-0');
+      setTimeout(() => toast.classList.add('opacity-0'), 2500);
+    }
+
+    // --- MAIN ANIMATION & RENDER LOOP ---
+    let lastTime = performance.now();
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const now = performance.now();
+      const dt = Math.min(0.05, (now - lastTime) / 1000);
+      lastTime = now;
+
+      // Lathe Wood Rotation
+      const rotSpeed = (state.rpm / 60) * Math.PI * 2 * dt;
+      
+      if (!state.isShowcase) {
+        woodMesh.rotation.x += rotSpeed;
+      } else {
+        // Slow aesthetic spin in showcase mode
+        woodMesh.rotation.x += 0.5 * dt;
+      }
+
+      // Handle continuous carving/sanding while pointer held down
+      if (isMouseDown && currentHoverPoint && !state.isShowcase) {
+        if (state.tool === 'varnish') {
+          // Continuous varnish polishing effect
+          woodMaterial.clearcoat = Math.min(1.0, woodMaterial.clearcoat + 0.2 * dt);
+        } else {
+          const cutSuccess = carveWoodAt(currentHoverPoint.x, dt);
+          if (cutSuccess) {
+            emitWoodChips(currentHoverPoint.x, currentHoverPoint.y, currentHoverPoint.z, 3);
+            updateAudio(state.toolDepth);
+          } else {
+            updateAudio(0);
+          }
+        }
+      }
+
+      // Update particle physics
+      updateParticles(dt);
+
+      // Render Three.js Scene
+      renderer.render(scene, camera);
+    }
+  </script>
+</body>
+</html>
